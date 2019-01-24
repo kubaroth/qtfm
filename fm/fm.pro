@@ -9,7 +9,9 @@ TEMPLATE = app
 
 DEPENDPATH += . src
 INCLUDEPATH += . src ../libfm
-LIBS += -L../libfm -lQtFM
+
+#LIBS += -L../libfm -lQtFM
+LIBS += -L../libfm ../libfm/libQtFM.a
 
 HEADERS += src/mainwindow.h \
     src/mymodel.h \
@@ -21,7 +23,8 @@ HEADERS += src/mainwindow.h \
     src/settingsdialog.h \
     src/customactionsmanager.h \
     src/processdialog.h \
-    src/applicationdialog.h
+    src/applicationdialog.h \
+    src/tabsets.h
 SOURCES += src/main.cpp \
     src/mainwindow.cpp \
     src/mymodel.cpp \
@@ -35,7 +38,8 @@ SOURCES += src/main.cpp \
     src/processdialog.cpp \
     src/applicationdialog.cpp \
     src/actiondefs.cpp \
-    src/actiontriggers.cpp
+    src/actiontriggers.cpp \
+    src/tabsets.cpp
 
 OTHER_FILES += $${TARGET}.desktop
 RESOURCES += ../$${TARGET}.qrc

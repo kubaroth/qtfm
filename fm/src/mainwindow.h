@@ -47,6 +47,8 @@
 #include "fileutils.h"
 #include "mimeutils.h"
 #include "customactionsmanager.h"
+#include "tabsets.h"
+#include <QStandardItem>
 
 // libdisks
 #ifndef NO_UDISKS
@@ -426,6 +428,7 @@ private:
     QAction *newWinAct;
     QAction *openTabAct;
     QAction *closeTabAct;
+    QAction *closeTabSetAct;
     QAction *tabsOnTopAct;
     QAction *aboutAct;
     QAction *aboutQtAct;
@@ -459,6 +462,9 @@ private:
     bool ignoreReload;
 
     QVector<QString> progressQueue;
+
+    QListView *tabSetsList;
+    TabSets *tabsets;
 
 protected:
     bool eventFilter(QObject *o, QEvent *e);

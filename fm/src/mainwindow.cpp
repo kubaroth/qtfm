@@ -44,6 +44,7 @@
 #include "progressdlg.h"
 #include "fileutils.h"
 #include "applicationdialog.h"
+#include "tabsets.h"
 
 #include "common.h"
 
@@ -155,6 +156,20 @@ MainWindow::MainWindow()
     dockBookmarks->setWidget(bookmarksList);
     addDockWidget(Qt::LeftDockWidgetArea, dockBookmarks);
 
+    /// Add tabset and Search window list to a Dock
+    /// Needs to appear here or otherwise will not be added to View Menu
+    QDockWidget * docktabsets = new
+    QDockWidget(tr("TabSets"),this,Qt::SubWindow);
+    docktabsets->setObjectName("TabSets");
+    tabSetsList = new QListView(docktabsets);
+    docktabsets->setWidget(tabSetsList);
+    addDockWidget(Qt::LeftDockWidgetArea, docktabsets);
+    // Add search
+    QDockWidget * docksearch = new QDockWidget(tr("SearchTabSets"),this,Qt::SubWindow);
+    QLineEdit *lineedit = new QLineEdit(docktabsets);
+    docksearch->setWidget(lineedit);
+    addDockWidget(Qt::LeftDockWidgetArea, docksearch);
+
     QWidget *main = new QWidget;
     mainLayout = new QVBoxLayout(main);
     mainLayout->setSpacing(0);
@@ -248,6 +263,72 @@ MainWindow::MainWindow()
     modelBookmarks = new bookmarkmodel(modelList->folderIcons);
     connect(modelBookmarks, SIGNAL(bookmarksChanged()), this, SLOT(handleBookmarksChanged()));
 
+    //tabs->setTabsClosable(true); FIXMEneeds connect button to close action
+
+    // Set up model - cannot be initialize earlier with widgets as crashes on selection
+    tabsets = new TabSets(this, tabs, lineedit);
+    this->tabsets->loadTabProjects();
+    tabSetsList->setModel(tabsets);
+
+    QShortcut *shrtLoad  = new QShortcut(QKeySequence(tr("Ctrl+F", "Load")), this);
+    QObject::connect(shrtLoad,    &QShortcut::activated, [this](){  this->tabsets->saveTabProjects();  });
+
+    QShortcut *shrtSave  = new QShortcut(QKeySequence(tr("Ctrl+G", "Save")), this);
+    QObject::connect(shrtSave, &QShortcut::activated, [this](){  this->tabsets->saveTabProjects();  });
+
+    connect(tabSetsList, &QListView::clicked, tabsets, &TabSets::updateCurrentTabSet);  // saves tabs and reloads
+
+    // On edit completion
+    QAbstractItemDelegate *delegate = tabSetsList->itemDelegate();
+    QObject::connect(delegate,    &QAbstractItemDelegate::closeEditor, tabsets, [this] {
+      qDebug()<< "delegate " << this->tabsets->projectIndex;
+      this->tabsets->renameTabSet();
+    });
+
+    // Trigger action when the new item is added
+    // connect(lineedit, &QLineEdit::textChanged, ttt, &TabSets::search);  // FIXME: not implemented
+    connect(lineedit, &QLineEdit::returnPressed, tabsets, &TabSets::addNew);
+
+    // FIXME: How to disable global shortcuts in this widget and override with local version (QDockWidget)
+    // QShortcut *shrtDelete  = new QShortcut(QKeySequence(tr("Delete", "remove") ), tabsets, Q_NULLPTR, Q_NULLPTR, Qt::WidgetShortcut);
+    QShortcut *shrtDelete  = new QShortcut(QKeySequence(tr("Ctrl+Delete", "remove") ), tabSetsList);
+    QObject::connect(shrtDelete,    &QShortcut::activated, tabsets, &TabSets::deleteTabSet);
+
+    // Search TabSet
+    connect(lineedit, &QLineEdit::textChanged, tabSetsList, [this](const QString inputtext){
+        QRegularExpression re(inputtext);
+        int numRows = this->tabSetsList->model()->rowCount();
+        //obtain data from a model
+        for (int row=0; row < numRows; ++row ){
+            if (inputtext == ""){
+                tabSetsList->setRowHidden(row,false);
+                continue;
+            }
+            QModelIndex index= this->tabsets->index(row,0);
+            QString itemtext = this->tabsets->data(index, Qt::DisplayRole).toString();
+            QRegularExpressionMatch match = re.match(itemtext, 0, QRegularExpression::PartialPreferFirstMatch);
+            if (match.hasMatch()){
+                // qDebug() << "found" << inputtext;
+                tabSetsList->setRowHidden(row,false);
+            }
+            else{
+                tabSetsList->setRowHidden(row,true);
+            }
+          }
+        }
+        );
+
+    /// Add RMB menu to tabset
+    closeTabSetAct = new QAction(tr("Delete Set"), this);
+    closeTabSetAct->setIcon(QIcon::fromTheme("window-close",QIcon(":/fm/images/window-close.png")));
+    connect(closeTabSetAct, &QAction::triggered, tabSetsList, [this](){
+      // qDebug()<< this->ttt->projectIndex<< this->ttt->projectIndex.isValid() << " " << this->ttt->tabsProjects.length();
+      if(this->tabsets->projectIndex.isValid()){
+        this->tabsets->deleteTabSet();
+      }
+    });
+
+
     // Load settings before showing window
     loadSettings();
 
@@ -314,6 +395,13 @@ void MainWindow::lateStart() {
   // Tabs configuration
   tabs->setDrawBase(0);
   tabs->setExpanding(0);
+
+  // Save tabset on next viewport enter
+  connect(list, &QListView::viewportEntered, [](){ qDebug() << "-- viewportEntered list"; });
+  connect(detailTree, &QTreeView::viewportEntered, [](){ qDebug() << "-- viewportEntered detail"; });
+
+  connect(list, &QListView::viewportEntered, [this](){ this->tabsets->saveTabProjects(); });
+  connect(detailTree, &QTreeView::viewportEntered, [this](){ this->tabsets->saveTabProjects(); });
 
   // Connect mouse clicks in views
   if (settings->value("singleClick").toInt() == 1) {
@@ -615,6 +703,7 @@ void MainWindow::closeEvent(QCloseEvent *event)
 {
     // Save settings
     writeSettings();
+    tabsets->saveTabProjects();
 
     modelList->cacheInfo();
     event->accept();
